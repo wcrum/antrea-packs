@@ -1,0 +1,25 @@
+{
+  "addonType": "monitoring",
+  "annotations": {
+  },
+  "cloudTypes": [
+    "all"
+  ],
+  "charts": [
+    "charts/theia-0.8.0.tgz"
+  ],
+  "constraints": {
+    "dependencies": [
+      {   
+        "packName": "cni-antrea",
+        "layer": "cni",
+        "minVersion": "0.0.0",
+        "type": "optional"
+      }
+    ]   
+  },
+  "displayName": "Theia",
+  "layer": "addon",
+  "name": "theia",
+  "version": "0.8.0"
+}

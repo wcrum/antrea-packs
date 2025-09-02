@@ -1,0 +1,25 @@
+{
+  "addonType": "monitoring",
+  "annotations": {
+  },
+  "cloudTypes": [
+    "all"
+  ],
+  "charts": [
+    "charts/flow-aggregator-2.4.1.tgz"
+  ],
+  "constraints": {
+    "dependencies": [
+      {   
+        "packName": "cni-antrea",
+        "layer": "cni",
+        "minVersion": "0.0.0",
+        "type": "optional"
+      }
+    ]   
+  },
+  "displayName": "Flow Aggregator",
+  "layer": "addon",
+  "name": "flow-aggregator",
+  "version": "2.4.1"
+}

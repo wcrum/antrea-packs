@@ -1,0 +1,170 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flow-aggregator
+  template:
+    metadata:
+      annotations:
+        # Automatically restart Pod if the ConfigMap changes
+        # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        app: flow-aggregator
+    spec:
+      hostNetwork: {{ .Values.hostNetwork }}
+      {{- if .Values.dnsPolicy }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- end }}
+      {{- if .Values.hostAliases }}
+      hostAliases:
+        {{- range .Values.hostAliases }}
+        - ip: {{ .ip }}
+          hostnames:
+          {{- range $hostname := .hostnames }}
+            - {{ $hostname }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+      containers:
+      - name: flow-aggregator
+        image: {{ include "flowAggregatorImage" . | quote }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{- if ((.Values.testing).coverage) }}
+        args:
+          - flow-aggregator
+          - --config=/etc/flow-aggregator/flow-aggregator.conf
+          - --logtostderr=false
+          - --log_dir=/var/log/antrea/flow-aggregator
+          - --alsologtostderr
+          - --log_file_max_size=100
+          - --log_file_max_num=4
+          - --v=4
+        {{- else }}
+        args:
+        - --config
+        - /etc/flow-aggregator/flow-aggregator.conf
+        - --logtostderr=false
+        - --log_dir=/var/log/antrea/flow-aggregator
+        - --alsologtostderr
+        - --log_file_max_size=100
+        - --log_file_max_num=4
+        {{- if .Values.logVerbosity }}
+        - "--v={{ .Values.logVerbosity }}"
+        {{- end }}
+        {{- end }}
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: CH_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-secret
+                key: username
+          - name: CH_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-secret
+                key: password
+          - name: FA_CONFIG_MAP_NAME
+            value: flow-aggregator-configmap
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: flow-aggregator-aws-credentials
+                key: aws_access_key_id
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: flow-aggregator-aws-credentials
+                key: aws_secret_access_key
+          - name: AWS_SESSION_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: flow-aggregator-aws-credentials
+                key: aws_session_token
+        ports:
+          - name: ipfix-udp
+            containerPort: 4739
+            protocol: UDP
+          - name: ipfix-tcp
+            containerPort: 4739
+            protocol: TCP
+          - name: grpc
+            containerPort: 14739
+            protocol: TCP
+        volumeMounts:
+        - mountPath: /etc/flow-aggregator
+          name: flow-aggregator-config
+          readOnly: true
+        - mountPath: /var/log/antrea/flow-aggregator
+          name: host-var-log-antrea-flow-aggregator
+        - name: certs
+          mountPath: /etc/flow-aggregator/certs
+          readOnly: true
+        {{- if .Values.flowAggregator.securityContext }}
+        securityContext:
+          {{- toYaml .Values.flowAggregator.securityContext | nindent 10 }}
+        {{- end }}
+        {{- if .Values.flowAggregator.resources }}
+        resources:
+          {{- toYaml .Values.flowAggregator.resources | nindent 10 }}
+        {{- end }}
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
+      priorityClassName: {{ .Values.priorityClassName }}
+      serviceAccountName: flow-aggregator
+      volumes:
+      - name: certs
+        projected:
+          defaultMode: 0400
+          sources:
+          # We add these secrets even if flowCollector.enable is false, or if flowCollector.tls.enable
+          # is false, as it is more convenient. Note that the secrets are optional.
+          {{- with .Values.flowCollector.tls }}
+          {{- if .caSecretName }}
+          - secret:
+              name: {{ .caSecretName }}
+              items:
+              - key: ca.crt
+                path: flow-collector/ca.crt
+              optional: true
+          {{- end }}
+          {{- if .clientSecretName }}
+          - secret:
+              name: {{ .clientSecretName }}
+              items:
+              - key: tls.crt
+                path: flow-collector/tls.crt
+              - key: tls.key
+                path: flow-collector/tls.key
+              optional: true
+          {{- end }}
+          {{- end }}
+          - secret:
+              name: clickhouse-ca
+              items:
+              - key: ca.crt
+                path: clickhouse/ca.crt
+              optional: true
+      - name: flow-aggregator-config
+        configMap:
+          name: flow-aggregator-configmap
+      - name: host-var-log-antrea-flow-aggregator
+        hostPath:
+          path: /var/log/antrea/flow-aggregator
+          type: DirectoryOrCreate

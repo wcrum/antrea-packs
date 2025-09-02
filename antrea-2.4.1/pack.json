@@ -1,0 +1,21 @@
+{
+  "ansibleRoles": [],
+  "cloudTypes": [
+    "aws"
+  ],
+  "displayName": "Antrea",
+  "eol": "",
+  "group": "",
+  "charts": [
+    "charts/antrea-v2.4.1.tgz"
+  ],
+  "layer": "cni",
+  "name": "cni-antrea",
+  "version": "2.4.1",
+  "constraints": {},
+  "annotations": {
+    "source": "spectrocloud",
+    "architecture": "amd64",
+    "airgap": "true"
+  }
+}
